@@ -3,7 +3,7 @@ More Updates on 6th of March 2025 (05-03-2025)
 
 KazCrypt is a lightweight python encryption program designed for secure text and file encryption.
 
-Functions:
+#Functions:
 
 -text encryption/decryption
 
