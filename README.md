@@ -1,5 +1,5 @@
 # KazCrypt - Secure Encryption
-More Updates on 6th of March 2025 (05-03-2025)
+More Updates such as an .exe file on 6th of March 2025 (06-03-2025)
 
 KazCrypt is a lightweight python encryption program designed for secure text and file encryption.
 
