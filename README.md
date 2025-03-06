@@ -32,3 +32,9 @@ Next, follow the prompts and enter the required information as requested. For ex
 After doing everything right, you should get the output (encrypted text/file)
 
 Note that if generating RSA keys, it can take a bit on older computers, but dont worry, it's not frozen
+
+# How it looks?
+
+![Menu](Menu.png "Main Menu")
+
+
