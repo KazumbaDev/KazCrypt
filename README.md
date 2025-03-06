@@ -1,5 +1,5 @@
 # KazCrypt - Secure Encryption
-More Updates such as an .exe file on 6th of March 2025 (06-03-2025)
+More Updates on 9th of March 2025 (09-03-2025)
 
 KazCrypt is a lightweight python encryption program designed for secure text and file encryption.
 
@@ -13,7 +13,7 @@ Contact - Discord - kazumba_2137
 
 -Strong password generation
 
--generationg RSA keys
+-generating RSA keys
 
 -encryption/decryption using RSA keys
 
