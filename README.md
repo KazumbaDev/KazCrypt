@@ -35,6 +35,8 @@ Note that if generating RSA keys, it can take a bit on older computers, but dont
 
 # How it looks?
 
-![Menu](Menu.png "Main Menu")
+![Menu](Photos/Menu.png "Main Menu")
+
+![Example of a text encryption](Photos/Text_Enc_Examp.png "Example of a text encryption")
 
 
