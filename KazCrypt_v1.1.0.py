@@ -11,6 +11,9 @@ from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from cryptography.hazmat.primitives import hashes
 from cryptography.exceptions import InvalidKey
+from cryptography.hazmat.primitives.asymmetric import dh
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives import serialization
 import math
 import secrets
 from Crypto.PublicKey import RSA
@@ -20,6 +23,81 @@ from Crypto.Cipher import PKCS1_OAEP
 DEFAULT_ITERATIONS = 1_000_000
 # Salt size for AES encryption of files (in bytes)
 SALT_SIZE = 16
+# dh parameters
+dh_private_key = None
+dh_parameters = None
+
+def Hash():
+    def get_available_hashes():
+        """Return a sorted list of all available hash algorithms in hashlib."""
+        return sorted(hashlib.algorithms_available)
+
+    def choose_algorithm():
+        """Display a menu of available hash algorithms and return the chosen one."""
+        available_hashes = get_available_hashes()
+        print("Choose a hashing algorithm:")
+        for index, algo in enumerate(available_hashes, start=1):
+            print(f"{index}) {algo}")
+        choice = input("Enter the number corresponding to your choice: ").strip()
+        if not choice.isdigit() or int(choice) < 1 or int(choice) > len(available_hashes):
+            print("Invalid choice!")
+            return None
+        return available_hashes[int(choice) - 1]
+
+    def hash_text(algorithm: str) -> str:
+        """Hash user-input text using the selected algorithm."""
+        message = input("Enter text to hash: ").encode()
+        hash_object = hashlib.new(algorithm, message)
+        return hash_object.hexdigest()
+
+    def hash_file(algorithm: str) -> str:
+        """Hash the contents of a file using the selected algorithm."""
+        file_input = input("Enter file path or type 'm' for menu: ").strip()
+        if file_input.lower() == "m":
+            # Use Tkinter's file dialog to let the user choose a file
+            root = tk.Tk()
+            root.withdraw()  # Hide the root window
+            file_path = filedialog.askopenfilename(title="Select file to hash")
+            if not file_path:
+                print("No file selected!")
+                return None
+        else:
+            file_path = file_input
+            # Remove surrounding quotes if present
+            if (file_path.startswith('"') and file_path.endswith('"')) or \
+            (file_path.startswith("'") and file_path.endswith("'")):
+                file_path = file_path[1:-1]
+        if not os.path.exists(file_path):
+            print("File not found!")
+            return None
+        hash_object = hashlib.new(algorithm)
+        block_size = 65536  # Read in 64KB chunks
+        with open(file_path, "rb") as f:
+            while chunk := f.read(block_size):
+                hash_object.update(chunk)
+        return hash_object.hexdigest()
+
+    def hash_main():
+        option = input("Hash (t)ext or a (f)ile? ").strip().lower()
+        if option not in ("t", "f"):
+            print("Invalid option!")
+            return
+
+        algorithm = choose_algorithm()
+        if not algorithm:
+            return
+
+        if option == "t":
+            result = hash_text(algorithm)
+        else:
+            result = hash_file(algorithm)
+
+        if result is not None:
+            print(f"\nComputed {algorithm} hash:")
+            print(result)
+
+    if __name__ == "__main__":
+        hash_main()
 
 def get_iterations():
     """Prompt user for PBKDF2 iterations (default: 1,000,000)."""
@@ -526,6 +604,251 @@ def rsa_decrypt_text():
     except Exception as e:
         print("Error decrypting text:", str(e))
 
+def dhke():
+    """
+    DHKE Initiate: Generates DH parameters and key pair.
+    Outputs a package with a type marker, so the receiver knows this is a DH key exchange.
+    """
+    global dh_private_key, dh_parameters
+    print("Generating Diffie–Hellman parameters and key pair...")
+    try:
+        parameters = dh.generate_parameters(generator=2, key_size=2048, backend=default_backend())
+    except Exception as e:
+        print("Error generating parameters:", str(e))
+        return
+    dh_parameters = parameters
+    parameter_numbers = parameters.parameter_numbers()
+    private_key = parameters.generate_private_key()
+    dh_private_key = private_key
+    public_key = private_key.public_key()
+    public_numbers = public_key.public_numbers()
+
+    # Convert parameters to hex strings
+    p_hex = hex(parameter_numbers.p)[2:]
+    g_hex = hex(parameter_numbers.g)[2:]
+    pub_hex = hex(public_numbers.y)[2:]
+    
+    # Include a type marker ("type=DH")
+    package = f"type=DH;p={p_hex};g={g_hex};pub={pub_hex}"
+    print("\nYour DHKE package (send it to the other party):")
+    print(package)
+    
+    remote_input = input("\nIf you have the other party's public key (in hex, optionally prefixed with 'pub=' or as a package), paste it below, or press Enter to skip: ").strip()
+    if remote_input:
+        # Check if the input appears to be a full package
+        if "type=" in remote_input and ";" in remote_input:
+            # Parse the package
+            parts = remote_input.split(';')
+            data = {}
+            for part in parts:
+                if '=' in part:
+                    key, value = part.split('=', 1)
+                    data[key.strip()] = value.strip()
+            # Expecting the package to have type=DH and a pub field
+            if data.get("type") != "DH" or "pub" not in data:
+                print("The provided package is not a valid DH package.")
+                return
+            remote_pub_hex = data["pub"]
+        else:
+            # If no package structure detected, assume it's just the hex public key (optionally with 'pub=' prefix)
+            remote_pub_hex = remote_input[4:] if remote_input.startswith("pub=") else remote_input
+
+        try:
+            remote_pub_int = int(remote_pub_hex, 16)
+            parameter_numbers = dh_parameters.parameter_numbers()
+            peer_numbers = dh.DHPublicNumbers(remote_pub_int, parameter_numbers)
+            peer_public_key = peer_numbers.public_key(backend=default_backend())
+            shared_key = dh_private_key.exchange(peer_public_key)
+            print("\nShared secret (hex):")
+            print(shared_key.hex())
+        except Exception as e:
+            print("Error computing shared secret:", str(e))
+
+
+def dhke2():
+    """
+    DHKE Respond: Accepts a DH package with a type marker, generates your key pair,
+    computes the shared secret, and outputs your public key package.
+    """
+    print("Paste the received DHKE package (format: type=DH;p=<hex>;g=<hex>;pub=<hex>):")
+    package = input().strip()
+    try:
+        # Parse the package into a dictionary
+        parts = package.split(';')
+        data = {}
+        for part in parts:
+            if '=' in part:
+                key, value = part.split('=', 1)
+                data[key.strip()] = value.strip()
+        # Check the type marker
+        if data.get("type") != "DH":
+            print("The package is not of type DH. Please use the appropriate function for the key exchange type.")
+            return
+        
+        p_hex = data.get("p")
+        g_hex = data.get("g")
+        remote_pub_hex = data.get("pub")
+        if not (p_hex and g_hex and remote_pub_hex):
+            print("Incomplete package.")
+            return
+        
+        p = int(p_hex, 16)
+        g = int(g_hex, 16)
+        remote_pub = int(remote_pub_hex, 16)
+        
+        # Reconstruct DH parameters
+        pn = dh.DHParameterNumbers(p, g)
+        parameters = pn.parameters(backend=default_backend())
+        parameter_numbers = parameters.parameter_numbers()
+        
+        # Generate own key pair
+        private_key = parameters.generate_private_key()
+        public_key = private_key.public_key()
+        public_numbers = public_key.public_numbers()
+        
+        # Compute shared secret
+        peer_numbers = dh.DHPublicNumbers(remote_pub, parameter_numbers)
+        peer_public_key = peer_numbers.public_key(backend=default_backend())
+        shared_key = private_key.exchange(peer_public_key)
+        
+        print("\nShared secret (hex):")
+        print(shared_key.hex())
+        
+        my_pub_hex = hex(public_numbers.y)[2:]
+        reply_package = f"type=DH;pub={my_pub_hex}"
+        print("\nSend the following package to the initiating party:")
+        print(reply_package)
+    except Exception as e:
+        print("Error processing package:", str(e))
+
+def ecdh_initiate():
+    """
+    ECDH Initiate:
+    Generates an ECDH key pair using the SECP256R1 curve.
+    Outputs a package with a type marker ("type=ECDH") to send to the other party.
+    If a remote public key package is provided, it extracts the public key and computes the shared secret.
+    """
+    print("Generating ECDH key pair using curve SECP256R1...")
+    private_key = ec.generate_private_key(ec.SECP256R1(), default_backend())
+    public_key = private_key.public_key()
+    
+    # Serialize public key to bytes (uncompressed point format)
+    pub_bytes = public_key.public_bytes(
+        encoding=serialization.Encoding.X962,
+        format=serialization.PublicFormat.UncompressedPoint
+    )
+    pub_hex = pub_bytes.hex()
+    
+    # Output the package with a type marker
+    package = "type=ECDH;pub=" + pub_hex
+    print("\nYour ECDH package (send it to the other party):")
+    print(package)
+    
+    remote_input = input(
+        "\nIf you have the other party's public key (in hex, optionally prefixed with 'pub=' or as a package), paste it below, or press Enter to skip: "
+    ).strip()
+    if remote_input:
+        # Check if the input appears to be a full package
+        if "type=" in remote_input and ";" in remote_input:
+            parts = remote_input.split(';')
+            data = {}
+            for part in parts:
+                if '=' in part:
+                    key, value = part.split('=', 1)
+                    data[key.strip()] = value.strip()
+            if data.get("type") != "ECDH" or "pub" not in data:
+                print("The provided package is not a valid ECDH package.")
+                return
+            remote_pub_hex = data["pub"]
+        else:
+            # If no package structure detected, assume it's just the hex public key (optionally with 'pub=' prefix)
+            remote_pub_hex = remote_input[4:] if remote_input.startswith("pub=") else remote_input
+        
+        try:
+            remote_pub_bytes = bytes.fromhex(remote_pub_hex)
+            remote_public_key = ec.EllipticCurvePublicKey.from_encoded_point(ec.SECP256R1(), remote_pub_bytes)
+            shared_secret = private_key.exchange(ec.ECDH(), remote_public_key)
+            print("\nShared secret (hex):")
+            print(shared_secret.hex())
+        except Exception as e:
+            print("Error computing shared secret:", str(e))
+
+
+def ecdh_respond():
+    """
+    ECDH Respond: Accepts an ECDH package with a type marker,
+    generates your own key pair, computes the shared secret,
+    and outputs your public key package.
+    """
+    print("Paste the received ECDH package (format: type=ECDH;pub=<hex>):")
+    package = input().strip()
+    try:
+        # Parse the package into a dictionary
+        parts = package.split(';')
+        data = {}
+        for part in parts:
+            if '=' in part:
+                key, value = part.split('=', 1)
+                data[key.strip()] = value.strip()
+        if data.get("type") != "ECDH":
+            print("The package is not of type ECDH. Please use the appropriate function for the key exchange type.")
+            return
+        
+        remote_pub_hex = data.get("pub")
+        if not remote_pub_hex:
+            print("Incomplete package.")
+            return
+        
+        remote_pub_bytes = bytes.fromhex(remote_pub_hex)
+        remote_public_key = ec.EllipticCurvePublicKey.from_encoded_point(ec.SECP256R1(), remote_pub_bytes)
+    except Exception as e:
+        print("Error processing the package:", str(e))
+        return
+
+    print("Generating your ECDH key pair using curve SECP256R1...")
+    private_key = ec.generate_private_key(ec.SECP256R1(), default_backend())
+    public_key = private_key.public_key()
+    pub_bytes = public_key.public_bytes(
+        encoding=serialization.Encoding.X962,
+        format=serialization.PublicFormat.UncompressedPoint
+    )
+    pub_hex = pub_bytes.hex()
+
+    try:
+        shared_secret = private_key.exchange(ec.ECDH(), remote_public_key)
+        print("\nShared secret (hex):")
+        print(shared_secret.hex())
+    except Exception as e:
+        print("Error computing shared secret:", str(e))
+        return
+
+    reply_package = "type=ECDH;pub=" + pub_hex
+    print("\nSend the following package to the initiating party:")
+    print(reply_package)
+
+def match_text():
+    while True:
+        # Get input strings
+        str1 = input("Paste the first string: ")
+        str2 = input("Paste the second string: ")
+
+        # Compare strings and display result
+        if str1 == str2:
+            print("✅ The strings match!")
+        else:
+            print("❌ The strings DO NOT match!")
+
+        # Loop until a valid choice is entered
+        while True:
+            choice = input("Do you want to check next string (y/n)? ").strip().lower()
+            if choice == "y":
+                # Break out of the inner loop and continue with the next string check
+                break
+            elif choice == "n":
+                return  # End the program
+            else:
+                print("Invalid choice!")
+
 # Main menu
 while True:
     print("\nChoose an operation:")
@@ -537,6 +860,12 @@ while True:
     print("6) Generate RSA keys")
     print("7) RSA encrypt text")
     print("8) RSA decrypt text")
+    print("9) Start DH Key Exchange")
+    print("10) Complete DH Key Exchange")
+    print("11) Start ECDH Key Exchange")
+    print("12) Complete ECDH Key Exchange")
+    print("13) Hash")
+    print("14) Check if texts matches")
     print("c) Clear console")
     print("e) Exit")
     choice = input("Enter the symbol corresponding to your choice: ").strip()
@@ -564,6 +893,24 @@ while True:
         input("\nPress Enter to continue...")
     elif choice == "8":
         rsa_decrypt_text()
+        input("\nPress Enter to continue...")
+    elif choice == "9":
+        dhke()
+        input("\nPress Enter to continue...")
+    elif choice == "10":
+        dhke2()
+        input("\nPress Enter to continue...")
+    elif choice == "11":
+        ecdh_initiate()
+        input("\nPress Enter to continue...")
+    elif choice == "12":
+        ecdh_respond()
+        input("\nPress Enter to continue...")
+    elif choice == "13":
+        Hash()
+        input("\nPress Enter to continue...")
+    elif choice == "14":
+        match_text()
         input("\nPress Enter to continue...")
     elif choice.lower() == "c":
         clear_console()
