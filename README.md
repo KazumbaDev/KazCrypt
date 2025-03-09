@@ -17,7 +17,7 @@ Contact - Discord - kazumba_2137
 
 -encryption/decryption using RSA keys
 
--has DH and ECDH key exchanges
+-has DH and ECDH key exchanges (will be explained later in the readme on 10-03-2025)
 
 -can hash file or text with 19 avaliable hashing algorythms
 
