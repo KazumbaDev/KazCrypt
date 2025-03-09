@@ -39,7 +39,7 @@ This is the main menu:
 
 ![Menu](Photos/Menu.png "Main Menu")
 
-This is an example of encryptiong text:
+This is an example of encrypting text:
 
 ![Example of a text encryption](Photos/Text_Enc_Examp.png "Example of a text encryption")
 
