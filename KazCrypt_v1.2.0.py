@@ -564,7 +564,8 @@ def save_rsa_keys(private_key: str, public_key: str):
     Asks the user if keys should be printed to console or saved to files.
     If saving to files, for the private key, ask if the user wants to encrypt the file.
     """
-    choice = input("Do you want the RSA keys to be displayed on the console (c) or saved to files (f)? ").strip().lower()
+    print("As of version 1.2.0 displaying keys on the console is broken!") # Delete after fix
+    choice = input("Do you want the RSA keys to be displayed on the console (c) or saved to files (f)? ").strip().lower() # Needs fixing
     if choice == "c":
         print("\nPrivate Key:")
         print(private_key)
@@ -1081,3 +1082,10 @@ while True:
     else:
         print("Invalid option!")
 
+
+
+"""
+to fix
+lines:
+567
+"""
