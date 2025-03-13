@@ -748,7 +748,7 @@ def rsa_decrypt_text():
     except Exception as e:
         print("Error decrypting text:", str(e))
 
-def dhke():
+def dh_initiate():
     """
     DHKE Initiate: Generates DH parameters and key pair.
     Outputs a package with a type marker, so the receiver knows this is a DH key exchange.
@@ -802,7 +802,7 @@ def dhke():
         except Exception as e:
             print("Error computing shared secret:", str(e))
 
-def dhke2():
+def dh_complete():
     """
     DHKE Respond: Accepts a DH package with a type marker, generates your key pair,
     computes the shared secret, and outputs your public key package.
@@ -900,7 +900,7 @@ def ecdh_initiate():
         except Exception as e:
             print("Error computing shared secret:", str(e))
 
-def ecdh_respond():
+def ecdh_complete():
     """
     ECDH Respond: Accepts an ECDH package with a type marker,
     generates your own key pair, computes the shared secret,
@@ -970,16 +970,16 @@ def match_text():
 
 # Old features menu - Legacy features menu for backward compatibility
 
-def old_features():
+def legacy_features():
     while True:
-        print("\nWARNING! THESE ARE OLD FEATURES AND USING THEM MAY POSE SECURITY RISKS")
+        print("\nWARNING! THESE ARE LEGACY FEATURES AND USING THEM MAY POSE SECURITY RISKS")
         print("Choose an operation:")
         print("1) Encrypt text (AES-CBC)")
         print("2) Decrypt text (AES-CBC)")
         print("3) Encrypt file (AES-CBC)")
         print("4) Decrypt file (AES-CBC)")
-        print("5) Start DH Key Exchange")
-        print("6) Complete DH Key Exchange")
+        print("5) Initiate Diffie–Hellman Key Exchange (Legacy)")
+        print("6) Complete Diffie–Hellman Key Exchange (Legacy)")
         print("n) Go to new features")
         print("c) Clear console")
         print("e) Exit")
@@ -998,10 +998,10 @@ def old_features():
             decrypt_file_cbc()
             input("\nPress Enter to continue...")
         elif choice2 == "5":
-            dhke()
+            dh_initiate()  # renamed from dhke() in v1.2.0
             input("\nPress Enter to continue...")
         elif choice2 == "6":
-            dhke2()
+            dh_complete()  # renamed from dhke2() in v1.2.0
             input("\nPress Enter to continue...")
         elif choice2.lower() == "c":
             clear_console()
@@ -1012,6 +1012,7 @@ def old_features():
             break
         else:
             print("Invalid option!")
+
 # --------------------------
 # Main menu
 # --------------------------
@@ -1025,11 +1026,11 @@ while True:
     print("6) Generate RSA keys")
     print("7) RSA encrypt text")
     print("8) RSA decrypt text")
-    print("9) Start ECDH Key Exchange")
-    print("10) Complete ECDH Key Exchange")
+    print("9) Initiate Elliptic Curve Diffie–Hellman Key Exchange")
+    print("10) Complete Elliptic Curve Diffie–Hellman Key Exchange")
     print("11) Hash")
     print("12) Check if texts match")
-    print("o) Show old features (Not recommended)")
+    print("o) Show legacy features (Not recommended)")
     print("c) Clear console")
     print("e) Exit")
     choice = input("Enter the symbol corresponding to your choice: ").strip()
@@ -1062,7 +1063,7 @@ while True:
         ecdh_initiate()
         input("\nPress Enter to continue...")
     elif choice == "10":
-        ecdh_respond()
+        ecdh_complete()  # renamed from ecdh_respond() in v1.2.0
         input("\nPress Enter to continue...")
     elif choice == "11":
         hash()
@@ -1071,7 +1072,7 @@ while True:
         match_text()
         input("\nPress Enter to continue...")
     elif choice.lower() == "o":
-        old_features()
+        legacy_features()
     elif choice.lower() == "c":
         clear_console()
     elif choice.lower() == "e":
@@ -1079,3 +1080,4 @@ while True:
         break
     else:
         print("Invalid option!")
+
