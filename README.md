@@ -1,5 +1,4 @@
 # KazCrypt - Secure Encryption
-More Updates on 14th of March 2025 (14-03-2025)
 
 KazCrypt is a lightweight python encryption program designed for secure text and file encryption.
 
@@ -17,7 +16,7 @@ Contact - Discord - kazumba_2137
 
 -encryption/decryption using RSA keys
 
--has DH and ECDH key exchanges (will be explained later in the readme on 10-03-2025)
+-has DH and ECDH key exchanges (will be explained later in the readme on 14-03-2025)
 
 -can hash file or text with 19 avaliable hashing algorythms
 
@@ -25,9 +24,9 @@ Contact - Discord - kazumba_2137
 
 # Usage
 
-Run KazCrypt_v1.1.0_InstallRequirements.bat to install requirements, or you can change the .bat to .txt and install them manually
+Run KazCrypt_v1.2.0_InstallRequirements.bat to install requirements, or you can change the .bat to .txt and install them manually
 
-Open KazCrypt v1.1.0.py file with python 3.13
+Open KazCrypt v1.2.0.py file with python 3.13
 
 Then if everything is working, a windows should pop up, where you can select an operation, e.g. 1) Encrypt text
 

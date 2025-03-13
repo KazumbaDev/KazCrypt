@@ -7,6 +7,7 @@ import string
 import tkinter as tk
 from tkinter import filedialog
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from cryptography.hazmat.primitives import hashes
@@ -18,6 +19,7 @@ import math
 import secrets
 from Crypto.PublicKey import RSA
 from Crypto.Cipher import PKCS1_OAEP
+import quantcrypt
 
 # Default PBKDF2 iterations for key derivation
 DEFAULT_ITERATIONS = 1_000_000
@@ -26,78 +28,6 @@ SALT_SIZE = 16
 # dh parameters
 dh_private_key = None
 dh_parameters = None
-
-def Hash():
-    def get_available_hashes():
-        """Return a sorted list of all available hash algorithms in hashlib."""
-        return sorted(hashlib.algorithms_available)
-
-    def choose_algorithm():
-        """Display a menu of available hash algorithms and return the chosen one."""
-        available_hashes = get_available_hashes()
-        print("Choose a hashing algorithm:")
-        for index, algo in enumerate(available_hashes, start=1):
-            print(f"{index}) {algo}")
-        choice = input("Enter the number corresponding to your choice: ").strip()
-        if not choice.isdigit() or int(choice) < 1 or int(choice) > len(available_hashes):
-            print("Invalid choice!")
-            return None
-        return available_hashes[int(choice) - 1]
-
-    def hash_text(algorithm: str) -> str:
-        """Hash user-input text using the selected algorithm."""
-        message = input("Enter text to hash: ").encode()
-        hash_object = hashlib.new(algorithm, message)
-        return hash_object.hexdigest()
-
-    def hash_file(algorithm: str) -> str:
-        """Hash the contents of a file using the selected algorithm."""
-        file_input = input("Enter file path or type 'm' for menu: ").strip()
-        if file_input.lower() == "m":
-            # Use Tkinter's file dialog to let the user choose a file
-            root = tk.Tk()
-            root.withdraw()  # Hide the root window
-            file_path = filedialog.askopenfilename(title="Select file to hash")
-            if not file_path:
-                print("No file selected!")
-                return None
-        else:
-            file_path = file_input
-            # Remove surrounding quotes if present
-            if (file_path.startswith('"') and file_path.endswith('"')) or \
-            (file_path.startswith("'") and file_path.endswith("'")):
-                file_path = file_path[1:-1]
-        if not os.path.exists(file_path):
-            print("File not found!")
-            return None
-        hash_object = hashlib.new(algorithm)
-        block_size = 65536  # Read in 64KB chunks
-        with open(file_path, "rb") as f:
-            while chunk := f.read(block_size):
-                hash_object.update(chunk)
-        return hash_object.hexdigest()
-
-    def hash_main():
-        option = input("Hash (t)ext or a (f)ile? ").strip().lower()
-        if option not in ("t", "f"):
-            print("Invalid option!")
-            return
-
-        algorithm = choose_algorithm()
-        if not algorithm:
-            return
-
-        if option == "t":
-            result = hash_text(algorithm)
-        else:
-            result = hash_file(algorithm)
-
-        if result is not None:
-            print(f"\nComputed {algorithm} hash:")
-            print(result)
-
-    if __name__ == "__main__":
-        hash_main()
 
 def get_iterations():
     """Prompt user for PBKDF2 iterations (default: 1,000,000)."""
@@ -134,7 +64,7 @@ def clear_console():
     else:
         os.system("clear")
 
-def encrypt():
+def encrypt_cbc():
     """Encrypts a message using AES-CBC with PBKDF2 key derivation."""
     password = input("Enter encryption key (password): ").encode()
     message = input("Enter message to encrypt: ").encode()
@@ -165,7 +95,7 @@ def encrypt():
     print("Encrypted Data (Base64):")
     print(encrypted_data)
 
-def decrypt():
+def decrypt_cbc():
     """Decrypts a message using AES-CBC with PBKDF2 key derivation."""
     password = input("Enter decryption key (password): ").encode()
     
@@ -199,8 +129,6 @@ def decrypt():
 
     except (ValueError, InvalidKey):
         print("\nDecryption completed with warnings.")
-
-        # Fallback computations in case of error
         recovery_salt = os.urandom(16)
         recovery_key = hashlib.pbkdf2_hmac('sha256', b"recovery_attempt", recovery_salt, 10_000_000)
 
@@ -210,9 +138,126 @@ def decrypt():
         
         partial_decryption_result = recover_partial_output(random.randint(20, 50))
         time.sleep(1.5 + os.urandom(1)[0] % 2.5)
-        print("Decrypted message:", partial_decryption_result)
+        print("Decrypted message (partial):", partial_decryption_result)
 
-def encrypt_file():
+def encrypt_gcm():
+    """Encrypts a message using AES-GCM (authenticated encryption) with PBKDF2 key derivation."""
+    password = input("Enter encryption key (password): ").encode()
+    message = input("Enter message to encrypt: ").encode()
+    iterations = get_iterations()
+
+    # Generate a random salt and derive a 32-byte key
+    salt = os.urandom(SALT_SIZE)
+    key = derive_key(password, salt, iterations)
+
+    # Generate a random nonce (12 bytes recommended for GCM)
+    nonce = os.urandom(12)
+    aesgcm = AESGCM(key)
+    ciphertext = aesgcm.encrypt(nonce, message, None)  # No additional authenticated data (AAD)
+
+    # Store iterations (4 bytes), salt, nonce, and ciphertext (includes tag) together
+    encrypted_data = base64.b64encode(
+        iterations.to_bytes(4, 'big') + salt + nonce + ciphertext
+    ).decode()
+
+    print("\nEncryption Successful!")
+    print("Encrypted Data (Base64):")
+    print(encrypted_data)
+
+def decrypt_gcm():
+    """Decrypts a message encrypted using AES-GCM with PBKDF2 key derivation."""
+    password = input("Enter decryption key (password): ").encode()
+    encrypted_input = input("Enter encrypted data (Base64): ").strip()
+    
+    try:
+        encrypted_bytes = base64.b64decode(encrypted_input)
+        
+        # Extract iterations, salt, nonce, and ciphertext
+        iterations = int.from_bytes(encrypted_bytes[:4], 'big')
+        salt = encrypted_bytes[4:4+SALT_SIZE]
+        nonce = encrypted_bytes[4+SALT_SIZE:4+SALT_SIZE+12]  # 12-byte nonce
+        ciphertext = encrypted_bytes[4+SALT_SIZE+12:]
+        
+        key = derive_key(password, salt, iterations)
+        aesgcm = AESGCM(key)
+        decrypted = aesgcm.decrypt(nonce, ciphertext, None)
+        
+        print("\nDecryption Successful!")
+        print("Decrypted message:", decrypted.decode())
+    except Exception as e:
+        print("Decryption error:", str(e))
+
+def Hash():
+    def get_available_hashes():
+        """Return a sorted list of all available hash algorithms in hashlib."""
+        return sorted(hashlib.algorithms_available)
+
+    def choose_algorithm():
+        """Display a menu of available hash algorithms and return the chosen one."""
+        available_hashes = get_available_hashes()
+        print("Choose a hashing algorithm:")
+        for index, algo in enumerate(available_hashes, start=1):
+            print(f"{index}) {algo}")
+        choice = input("Enter the number corresponding to your choice: ").strip()
+        if not choice.isdigit() or int(choice) < 1 or int(choice) > len(available_hashes):
+            print("Invalid choice!")
+            return None
+        return available_hashes[int(choice) - 1]
+
+    def hash_text(algorithm: str) -> str:
+        """Hash user-input text using the selected algorithm."""
+        message = input("Enter text to hash: ").encode()
+        hash_object = hashlib.new(algorithm, message)
+        return hash_object.hexdigest()
+
+    def hash_file(algorithm: str) -> str:
+        """Hash the contents of a file using the selected algorithm."""
+        file_input = input("Enter file path or type 'm' for menu: ").strip()
+        if file_input.lower() == "m":
+            root = tk.Tk()
+            root.withdraw()
+            file_path = filedialog.askopenfilename(title="Select file to hash")
+            if not file_path:
+                print("No file selected!")
+                return None
+        else:
+            file_path = file_input
+            if (file_path.startswith('"') and file_path.endswith('"')) or \
+               (file_path.startswith("'") and file_path.endswith("'")):
+                file_path = file_path[1:-1]
+        if not os.path.exists(file_path):
+            print("File not found!")
+            return None
+        hash_object = hashlib.new(algorithm)
+        block_size = 65536  # 64KB
+        with open(file_path, "rb") as f:
+            while chunk := f.read(block_size):
+                hash_object.update(chunk)
+        return hash_object.hexdigest()
+
+    def hash_main():
+        option = input("Hash (t)ext or a (f)ile? ").strip().lower()
+        if option not in ("t", "f"):
+            print("Invalid option!")
+            return
+
+        algorithm = choose_algorithm()
+        if not algorithm:
+            return
+
+        if option == "t":
+            result = hash_text(algorithm)
+        else:
+            result = hash_file(algorithm)
+
+        if result is not None:
+            print(f"\nComputed {algorithm} hash:")
+            print(result)
+
+    if __name__ == "__main__":
+        hash_main()
+
+def encrypt_file_cbc():
     """Encrypts a file using AES-CBC with PBKDF2 key derivation.
     Saves the output in the format: original_name + '.encf'
     """
@@ -249,7 +294,6 @@ def encrypt_file():
     file_data += bytes([pad_length] * pad_length)
     ciphertext = encryptor.update(file_data) + encryptor.finalize()
 
-    # Combine iterations, salt, iv and ciphertext into one string
     encrypted_data = base64.b64encode(
         iterations.to_bytes(4, 'big') + salt + iv + ciphertext
     ).decode()
@@ -284,7 +328,7 @@ def encrypt_file():
     except Exception as e:
         print("Error saving encrypted file:", str(e))
 
-def decrypt_file():
+def decrypt_file_cbc():
     """Decrypts a file using AES-CBC with PBKDF2 key derivation.
     If the file name ends with '.encf', that suffix is removed from the default save name.
     """
@@ -371,6 +415,115 @@ def decrypt_file():
         time.sleep(1.5 + os.urandom(1)[0] % 2.5)
         print("Decrypted file content (partial):", partial_decryption_result)
 
+def encrypt_file_gcm():
+    root = tk.Tk()
+    root.withdraw()
+    method = input("Enter file path or type 'm' for menu: ").strip().lower()
+    if method == 'm':
+        file_path = filedialog.askopenfilename(title="Select file to encrypt", filetypes=[("All files", "*.*")])
+    else:
+        file_path = sanitize_file_path(method)
+    
+    if not file_path or not os.path.isfile(file_path):
+        print("File does not exist.")
+        return
+
+    try:
+        with open(file_path, "rb") as f:
+            file_data = f.read()
+    except Exception as e:
+        print("Error reading file:", str(e))
+        return
+
+    password = input("Enter encryption key (password) for file encryption: ").encode()
+    iterations = get_iterations()
+
+    salt = os.urandom(SALT_SIZE)
+    key = derive_key(password, salt, iterations)
+    nonce = os.urandom(12)
+    aesgcm = AESGCM(key)
+    ciphertext = aesgcm.encrypt(nonce, file_data, None)
+
+    # Build the encrypted output: iterations (4 bytes) + salt + nonce + ciphertext
+    encrypted_data = base64.b64encode(iterations.to_bytes(4, 'big') + salt + nonce + ciphertext).decode()
+    original_name = os.path.basename(file_path)
+    default_save_name = original_name + ".gcmenc" if not original_name.lower().endswith(".gcmenc") else original_name
+
+    save_choice = input("Enter file path for saving or type 'm' for menu: ").strip()
+    if save_choice.lower() == 'm':
+        save_path = filedialog.asksaveasfilename(title="Save encrypted file", defaultextension=".gcmenc", initialfile=default_save_name, filetypes=[("GCM Encrypted files", "*.gcmenc")])
+    else:
+        save_path = sanitize_file_path(save_choice)
+        if not save_path.lower().endswith(".gcmenc"):
+            save_path += ".gcmenc"
+
+    if not save_path:
+        print("No save location selected.")
+        return
+
+    try:
+        with open(save_path, "w") as f:
+            f.write(encrypted_data)
+        print("File successfully encrypted with AES-GCM!")
+    except Exception as e:
+        print("Error saving encrypted file:", str(e))
+
+def decrypt_file_gcm():
+    root = tk.Tk()
+    root.withdraw()
+    method = input("Enter encrypted file path or type 'm' for menu: ").strip().lower()
+    if method == 'm':
+        file_path = filedialog.askopenfilename(title="Select file to decrypt", filetypes=[("GCM Encrypted files", "*.gcmenc"), ("All files", "*.*")])
+    else:
+        file_path = sanitize_file_path(method)
+    
+    if not file_path or not os.path.isfile(file_path):
+        print("File does not exist.")
+        return
+
+    try:
+        with open(file_path, "r") as f:
+            encrypted_data = f.read().strip()
+    except Exception as e:
+        print("Error reading file:", str(e))
+        return
+
+    password = input("Enter decryption key (password) for file decryption: ").encode()
+    try:
+        encrypted_bytes = base64.b64decode(encrypted_data)
+        iterations = int.from_bytes(encrypted_bytes[:4], 'big')
+        salt = encrypted_bytes[4:4+SALT_SIZE]
+        nonce = encrypted_bytes[4+SALT_SIZE:4+SALT_SIZE+12]
+        ciphertext = encrypted_bytes[4+SALT_SIZE+12:]
+        
+        key = derive_key(password, salt, iterations)
+        aesgcm = AESGCM(key)
+        decrypted_data = aesgcm.decrypt(nonce, ciphertext, None)
+        
+        original_name = os.path.basename(file_path)
+        default_save_name = original_name.replace(".gcmenc", "") if original_name.lower().endswith(".gcmenc") else original_name + ".dec"
+        
+        save_choice = input("Enter file path to save decrypted file or type 'm' for menu: ").strip()
+        if save_choice.lower() == 'm':
+            save_path = filedialog.asksaveasfilename(title="Save decrypted file", defaultextension="", initialfile=default_save_name, filetypes=[("All files", "*.*")])
+        else:
+            save_path = sanitize_file_path(save_choice)
+            if save_path.lower().endswith(".gcmenc"):
+                save_path = save_path[:-7]
+        
+        if not save_path:
+            print("No save location selected.")
+            return
+
+        try:
+            with open(save_path, "wb") as f:
+                f.write(decrypted_data)
+            print("File successfully decrypted with AES-GCM!")
+        except Exception as e:
+            print("Error saving decrypted file:", str(e))
+    except Exception as e:
+        print("Decryption error:", str(e))
+
 def generate_random_password():
     """Generates a random password using cryptographically secure methods."""
     print("\nChoose password type:")
@@ -384,7 +537,6 @@ def generate_random_password():
         password = ''.join(secrets.choice(charset) for _ in range(length))
         entropy = length * math.log2(len(charset))
     else:
-        # Strong password: must contain lowercase, uppercase, and special characters
         length = random.randint(12, 20)
         charset = string.ascii_lowercase + string.ascii_uppercase + string.digits + string.punctuation
         while True:
@@ -419,7 +571,6 @@ def save_rsa_keys(private_key: str, public_key: str):
         print("\nPublic Key:")
         print(public_key)
     elif choice == "f":
-        # Private key saving
         encrypt_choice = input("Do you want to encrypt the private key file? (y/n): ").strip().lower()
         if encrypt_choice == "y":
             password = input("Enter password to encrypt the private key file: ")
@@ -441,11 +592,8 @@ def save_rsa_keys(private_key: str, public_key: str):
             if not priv_path:
                 print("No path provided for the private key.")
                 return
-            # Encrypt and save private key file
-            # Here, we use our AES functions to encrypt the private key
             salt = os.urandom(SALT_SIZE)
             key_enc = derive_key(password.encode(), salt, iterations)
-            # Using AES in CBC mode; add PKCS7 padding manually
             iv = os.urandom(16)
             cipher = Cipher(algorithms.AES(key_enc), modes.CBC(iv), backend=default_backend())
             encryptor = cipher.encryptor()
@@ -453,7 +601,6 @@ def save_rsa_keys(private_key: str, public_key: str):
             pad_length = 16 - (len(priv_data) % 16)
             priv_data += bytes([pad_length] * pad_length)
             ciphertext = encryptor.update(priv_data) + encryptor.finalize()
-            # Save file: store iterations (4 bytes), salt, iv, and ciphertext, all base64-encoded
             encrypted_priv = base64.b64encode(iterations.to_bytes(4, 'big') + salt + iv + ciphertext).decode()
             with open(priv_path, "w") as f:
                 f.write(encrypted_priv)
@@ -480,7 +627,6 @@ def save_rsa_keys(private_key: str, public_key: str):
                 f.write(private_key)
             print(f"[INFO] Private key saved to {priv_path}")
 
-        # Public key saving
         pub_path = input("Enter file path for saving the public key or type 'm' for menu: ").strip()
         if pub_path.lower() == "m":
             root = tk.Tk()
@@ -559,7 +705,6 @@ def rsa_decrypt_text():
         if not priv_key_path or not os.path.isfile(priv_key_path):
             print("No file selected or file does not exist.")
             return
-        # Check if the file appears encrypted by its extension (".enc")
         if priv_key_path.lower().endswith((".enc", ".encf")):
             password = input("Enter decryption password for private key: ")
             iterations = get_iterations()
@@ -567,7 +712,6 @@ def rsa_decrypt_text():
                 with open(priv_key_path, "r") as f:
                     encrypted_data = f.read().strip()
                 encrypted_bytes = base64.b64decode(encrypted_data)
-                # Expect first 4 bytes = iterations, next SALT_SIZE bytes = salt, then 16 bytes iv
                 file_iterations = int.from_bytes(encrypted_bytes[:4], 'big')
                 salt = encrypted_bytes[4:4+SALT_SIZE]
                 iv = encrypted_bytes[4+SALT_SIZE:4+SALT_SIZE+16]
@@ -623,34 +767,28 @@ def dhke():
     public_key = private_key.public_key()
     public_numbers = public_key.public_numbers()
 
-    # Convert parameters to hex strings
     p_hex = hex(parameter_numbers.p)[2:]
     g_hex = hex(parameter_numbers.g)[2:]
     pub_hex = hex(public_numbers.y)[2:]
     
-    # Include a type marker ("type=DH")
     package = f"type=DH;p={p_hex};g={g_hex};pub={pub_hex}"
     print("\nYour DHKE package (send it to the other party):")
     print(package)
     
     remote_input = input("\nIf you have the other party's public key (in hex, optionally prefixed with 'pub=' or as a package), paste it below, or press Enter to skip: ").strip()
     if remote_input:
-        # Check if the input appears to be a full package
         if "type=" in remote_input and ";" in remote_input:
-            # Parse the package
             parts = remote_input.split(';')
             data = {}
             for part in parts:
                 if '=' in part:
                     key, value = part.split('=', 1)
                     data[key.strip()] = value.strip()
-            # Expecting the package to have type=DH and a pub field
             if data.get("type") != "DH" or "pub" not in data:
                 print("The provided package is not a valid DH package.")
                 return
             remote_pub_hex = data["pub"]
         else:
-            # If no package structure detected, assume it's just the hex public key (optionally with 'pub=' prefix)
             remote_pub_hex = remote_input[4:] if remote_input.startswith("pub=") else remote_input
 
         try:
@@ -664,7 +802,6 @@ def dhke():
         except Exception as e:
             print("Error computing shared secret:", str(e))
 
-
 def dhke2():
     """
     DHKE Respond: Accepts a DH package with a type marker, generates your key pair,
@@ -673,14 +810,12 @@ def dhke2():
     print("Paste the received DHKE package (format: type=DH;p=<hex>;g=<hex>;pub=<hex>):")
     package = input().strip()
     try:
-        # Parse the package into a dictionary
         parts = package.split(';')
         data = {}
         for part in parts:
             if '=' in part:
                 key, value = part.split('=', 1)
                 data[key.strip()] = value.strip()
-        # Check the type marker
         if data.get("type") != "DH":
             print("The package is not of type DH. Please use the appropriate function for the key exchange type.")
             return
@@ -696,17 +831,14 @@ def dhke2():
         g = int(g_hex, 16)
         remote_pub = int(remote_pub_hex, 16)
         
-        # Reconstruct DH parameters
         pn = dh.DHParameterNumbers(p, g)
         parameters = pn.parameters(backend=default_backend())
         parameter_numbers = parameters.parameter_numbers()
         
-        # Generate own key pair
         private_key = parameters.generate_private_key()
         public_key = private_key.public_key()
         public_numbers = public_key.public_numbers()
         
-        # Compute shared secret
         peer_numbers = dh.DHPublicNumbers(remote_pub, parameter_numbers)
         peer_public_key = peer_numbers.public_key(backend=default_backend())
         shared_key = private_key.exchange(peer_public_key)
@@ -726,20 +858,17 @@ def ecdh_initiate():
     ECDH Initiate:
     Generates an ECDH key pair using the SECP256R1 curve.
     Outputs a package with a type marker ("type=ECDH") to send to the other party.
-    If a remote public key package is provided, it extracts the public key and computes the shared secret.
     """
     print("Generating ECDH key pair using curve SECP256R1...")
     private_key = ec.generate_private_key(ec.SECP256R1(), default_backend())
     public_key = private_key.public_key()
     
-    # Serialize public key to bytes (uncompressed point format)
     pub_bytes = public_key.public_bytes(
         encoding=serialization.Encoding.X962,
         format=serialization.PublicFormat.UncompressedPoint
     )
     pub_hex = pub_bytes.hex()
     
-    # Output the package with a type marker
     package = "type=ECDH;pub=" + pub_hex
     print("\nYour ECDH package (send it to the other party):")
     print(package)
@@ -748,7 +877,6 @@ def ecdh_initiate():
         "\nIf you have the other party's public key (in hex, optionally prefixed with 'pub=' or as a package), paste it below, or press Enter to skip: "
     ).strip()
     if remote_input:
-        # Check if the input appears to be a full package
         if "type=" in remote_input and ";" in remote_input:
             parts = remote_input.split(';')
             data = {}
@@ -761,7 +889,6 @@ def ecdh_initiate():
                 return
             remote_pub_hex = data["pub"]
         else:
-            # If no package structure detected, assume it's just the hex public key (optionally with 'pub=' prefix)
             remote_pub_hex = remote_input[4:] if remote_input.startswith("pub=") else remote_input
         
         try:
@@ -773,7 +900,6 @@ def ecdh_initiate():
         except Exception as e:
             print("Error computing shared secret:", str(e))
 
-
 def ecdh_respond():
     """
     ECDH Respond: Accepts an ECDH package with a type marker,
@@ -783,7 +909,6 @@ def ecdh_respond():
     print("Paste the received ECDH package (format: type=ECDH;pub=<hex>):")
     package = input().strip()
     try:
-        # Parse the package into a dictionary
         parts = package.split(';')
         data = {}
         for part in parts:
@@ -828,59 +953,98 @@ def ecdh_respond():
 
 def match_text():
     while True:
-        # Get input strings
         str1 = input("Paste the first string: ")
         str2 = input("Paste the second string: ")
-
-        # Compare strings and display result
         if str1 == str2:
             print("✅ The strings match!")
         else:
             print("❌ The strings DO NOT match!")
-
-        # Loop until a valid choice is entered
         while True:
             choice = input("Do you want to check next string (y/n)? ").strip().lower()
             if choice == "y":
-                # Break out of the inner loop and continue with the next string check
                 break
             elif choice == "n":
-                return  # End the program
+                return
             else:
                 print("Invalid choice!")
 
+# Old features menu - Legacy features menu for backward compatibility
+
+def old_features():
+    while True:
+        print("\nWARNING! THESE ARE OLD FEATURES AND USING THEM MAY POSE SECURITY RISKS")
+        print("Choose an operation:")
+        print("1) Encrypt text (AES-CBC)")
+        print("2) Decrypt text (AES-CBC)")
+        print("3) Encrypt file (AES-CBC)")
+        print("4) Decrypt file (AES-CBC)")
+        print("5) Start DH Key Exchange")
+        print("6) Complete DH Key Exchange")
+        print("n) Go to new features")
+        print("c) Clear console")
+        print("e) Exit")
+        choice2 = input("Enter the symbol corresponding to your choice: ").strip()
+        
+        if choice2 == "1":
+            encrypt_cbc()
+            input("\nPress Enter to continue...")
+        elif choice2 == "2":
+            decrypt_cbc()
+            input("\nPress Enter to continue...")
+        elif choice2 == "3":
+            encrypt_file_cbc()
+            input("\nPress Enter to continue...")
+        elif choice2 == "4":
+            decrypt_file_cbc()
+            input("\nPress Enter to continue...")
+        elif choice2 == "5":
+            dhke()
+            input("\nPress Enter to continue...")
+        elif choice2 == "6":
+            dhke2()
+            input("\nPress Enter to continue...")
+        elif choice2.lower() == "c":
+            clear_console()
+        elif choice2.lower() == "n":
+            return
+        elif choice2.lower() == "e":
+            print("Exiting program.")
+            break
+        else:
+            print("Invalid option!")
+# --------------------------
 # Main menu
+# --------------------------
 while True:
     print("\nChoose an operation:")
-    print("1) Encrypt text")
-    print("2) Decrypt text")
-    print("3) Encrypt file")
-    print("4) Decrypt file")
+    print("1) Encrypt text (AES-GCM)")
+    print("2) Decrypt text (AES-GCM)")
+    print("3) Encrypt file (AES-GCM)")
+    print("4) Decrypt file (AES-GCM)")
     print("5) Generate random password")
     print("6) Generate RSA keys")
     print("7) RSA encrypt text")
     print("8) RSA decrypt text")
-    print("9) Start DH Key Exchange")
-    print("10) Complete DH Key Exchange")
-    print("11) Start ECDH Key Exchange")
-    print("12) Complete ECDH Key Exchange")
-    print("13) Hash")
-    print("14) Check if texts matches")
+    print("9) Start ECDH Key Exchange")
+    print("10) Complete ECDH Key Exchange")
+    print("11) Hash")
+    print("12) Check if texts match")
+    print("o) Show old features (Not recommended)")
     print("c) Clear console")
     print("e) Exit")
     choice = input("Enter the symbol corresponding to your choice: ").strip()
     
     if choice == "1":
-        encrypt()
+        encrypt_gcm()
         input("\nPress Enter to continue...")
     elif choice == "2":
-        decrypt()
+        decrypt_gcm()
         input("\nPress Enter to continue...")
     elif choice == "3":
-        encrypt_file()
+        encrypt_file_gcm()
         input("\nPress Enter to continue...")
     elif choice == "4":
-        decrypt_file()
+        decrypt_file_gcm()
         input("\nPress Enter to continue...")
     elif choice == "5":
         generate_random_password()
@@ -895,23 +1059,19 @@ while True:
         rsa_decrypt_text()
         input("\nPress Enter to continue...")
     elif choice == "9":
-        dhke()
-        input("\nPress Enter to continue...")
-    elif choice == "10":
-        dhke2()
-        input("\nPress Enter to continue...")
-    elif choice == "11":
         ecdh_initiate()
         input("\nPress Enter to continue...")
-    elif choice == "12":
+    elif choice == "10":
         ecdh_respond()
         input("\nPress Enter to continue...")
-    elif choice == "13":
-        Hash()
+    elif choice == "11":
+        hash()
         input("\nPress Enter to continue...")
-    elif choice == "14":
+    elif choice == "12":
         match_text()
         input("\nPress Enter to continue...")
+    elif choice.lower() == "o":
+        old_features()
     elif choice.lower() == "c":
         clear_console()
     elif choice.lower() == "e":
