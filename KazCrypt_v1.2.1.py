@@ -187,7 +187,7 @@ def decrypt_gcm():
     except Exception as e:
         print("Decryption error:", str(e))
 
-def Hash():
+def perform_hash():
     def get_available_hashes():
         """Return a sorted list of all available hash algorithms in hashlib."""
         return sorted(hashlib.algorithms_available)
@@ -1067,7 +1067,7 @@ while True:
         ecdh_complete()  # renamed from ecdh_respond() in v1.2.0
         input("\nPress Enter to continue...")
     elif choice == "11":
-        hash()
+        perform_hash()
         input("\nPress Enter to continue...")
     elif choice == "12":
         match_text()
