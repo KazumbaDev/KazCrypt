@@ -52,3 +52,40 @@ This is how key exchange looks like:
 
 ![Example of key exchange](Photos/ECDH_v1.2.2.png "Example of a key exchange")
 
+# How to use key exchange?
+
+To initiate an ECDH exchange:
+
+Choose the option “Initiate Elliptic Curve Diffie–Hellman Key Exchange”
+
+Copy the generated package and send it to your communication partner
+
+Do not close the script
+
+.
+
+To complete the ECDH exchange:
+
+Choose the option "Complete Elliptic Curve Diffie–Hellman Key Exchange"
+
+Paste the package received from your partner
+
+The script will then generate your key pair, compute the shared secret, and display your key package
+
+Send your key package back to your partner
+
+.
+
+To calculate the shared secret for the initiating party:
+
+After receiving the responder's package, you have to paste it
+
+Then it will compute shared secret for the initiating party
+
+
+
+
+
+
+
+
