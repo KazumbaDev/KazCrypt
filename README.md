@@ -42,10 +42,13 @@ Note that if generating RSA keys, it can take a bit on older computers, but dont
 
 This is the main menu:
 
-![Menu](Photos/Menu.png "Main Menu")
+![Menu](Photos/Menu_v1.2.2.png "Main Menu")
 
 This is an example of encrypting text:
 
-![Example of a text encryption](Photos/Text_Enc_Examp.png "Example of a text encryption")
+![Example of a text encryption](Photos/Text_Enc_v1.2.2.png "Example of a text encryption")
 
+This is how key exchange looks like:
+
+![Example of key exchange](Photos/ECDH_v1.2.2.png "Example of a key exchange")
 
