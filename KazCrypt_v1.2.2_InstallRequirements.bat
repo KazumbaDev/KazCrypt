@@ -1,4 +1,5 @@
 pip install cryptography
 pip install pycryptodome
-py -3.13 -m pip install quantcrypt
+pip install packaging
+pip install requests
 pause

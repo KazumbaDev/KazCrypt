@@ -19,8 +19,12 @@ import math
 import secrets
 from Crypto.PublicKey import RSA
 from Crypto.Cipher import PKCS1_OAEP
-import quantcrypt
+import requests
+from packaging import version
+#import quantcrypt
 
+# Your current version (duhh)
+CURRENT_VERSION = "1.2.2"
 # Default PBKDF2 iterations for key derivation
 DEFAULT_ITERATIONS = 1_000_000
 # Salt size for AES encryption of files (in bytes)
@@ -28,6 +32,26 @@ SALT_SIZE = 16
 # dh parameters
 dh_private_key = None
 dh_parameters = None
+
+def check_for_updates():
+    api_url = f"https://api.github.com/repos/KazumbaDev/KazCrypt/releases/latest"
+    
+    try:
+        response = requests.get(api_url, timeout=10)
+        if response.status_code == 200:
+            data = response.json()
+            latest_version = data.get("tag_name", "").lstrip("v")
+            if latest_version and version.parse(latest_version) > version.parse(CURRENT_VERSION):
+                print(f"A new version is available: {latest_version}. You are using {CURRENT_VERSION}.")
+                print(f"You can download the latest version here: https://github.com/KazumbaDev/KazCrypt/releases/latest")
+            else:
+                print("You have the latest version.")
+        else:
+            print("Could not check for updates. Status code:", response.status_code)
+    except requests.RequestException as e:
+        print("An error occurred while checking for updates:", e)
+
+check_for_updates() # Calls the function that checks for updates
 
 def get_iterations():
     """Prompt user for PBKDF2 iterations (default: 1,000,000)."""
@@ -983,7 +1007,6 @@ def legacy_features():
         print("6) Complete Diffie–Hellman Key Exchange (Legacy)")
         print("n) Go to new features")
         print("c) Clear console")
-        print("e) Exit")
         choice2 = input("Enter the symbol corresponding to your choice: ").strip()
         
         if choice2 == "1":
@@ -1008,9 +1031,6 @@ def legacy_features():
             clear_console()
         elif choice2.lower() == "n":
             return
-        elif choice2.lower() == "e":
-            print("Exiting program.")
-            break
         else:
             print("Invalid option!")
 
