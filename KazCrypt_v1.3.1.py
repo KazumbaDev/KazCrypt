@@ -1180,11 +1180,16 @@ def split_file_into_parts():
 
 def combine_file_parts():
     """
-    Combines file parts into the original file.
-    The first part contains a header with the original file's extension.
+    Combines file parts in a directory into the original file.
+    The first part should include a header in the form:
+        KAZSPLITEXT:<original_extension>\n
     """
+    import os, re, tkinter as tk
+    from tkinter import filedialog
+
     root = tk.Tk()
     root.withdraw()
+
     method = input("Enter folder path containing the parts or type 'm' for menu: ").strip().lower()
     if method == "m":
         folder_path = filedialog.askdirectory(title="Select folder containing file parts")
@@ -1193,20 +1198,26 @@ def combine_file_parts():
     if not folder_path or not os.path.isdir(folder_path):
         print("Folder not found!")
         return
-    
-    folder_name = os.path.basename(folder_path)
-    all_files = os.listdir(folder_path)
-    pattern = re.compile(rf"^{re.escape(folder_name)}_(\d+)\.part$")
+
+    pattern = re.compile(r'^(.*)_(\d+)\.part$')
     parts = []
-    for fname in all_files:
+    for fname in os.listdir(folder_path):
         match = pattern.match(fname)
         if match:
-            part_number = int(match.group(1))
-            parts.append((part_number, fname))
+            prefix = match.group(1)
+            number = int(match.group(2))
+            parts.append((number, fname, prefix))
     if not parts:
         print("No parts found in the selected folder with the expected naming convention.")
         return
 
+    prefixes = {item[2] for item in parts}
+    if len(prefixes) != 1:
+        print("Multiple different file prefixes found. Cannot determine which set to combine.")
+        return
+    common_prefix = prefixes.pop()
+
+    # Sort parts by their numeric suffix.
     parts.sort(key=lambda x: x[0])
     first_part_path = os.path.join(folder_path, parts[0][1])
     file_ext = ""
@@ -1215,26 +1226,26 @@ def combine_file_parts():
             header_line = f.readline()
             if header_line.startswith(b"KAZSPLITEXT:"):
                 file_ext = header_line[len(b"KAZSPLITEXT:"):].strip().decode()
-            # Read the rest of the data from the first part after the header.
             first_part_data = f.read()
     except Exception as e:
         print("Error reading the first part for header:", str(e))
         return
 
-    output_filename = folder_name + "_combined" + file_ext
+    output_filename = common_prefix + "_combined" + file_ext
     output_path = os.path.join(os.path.dirname(folder_path), output_filename)
     
     try:
         with open(output_path, "wb") as outfile:
             outfile.write(first_part_data)
-            for part_number, fname in parts[1:]:
+            for number, fname, _ in parts[1:]:
                 part_filepath = os.path.join(folder_path, fname)
                 with open(part_filepath, "rb") as infile:
                     outfile.write(infile.read())
-                print(f"Combined part {part_number} from {part_filepath}")
+                print(f"Combined part {number} from {part_filepath}")
         print(f"\nFile successfully reassembled as: {output_path}")
     except Exception as e:
         print("Error combining file parts:", str(e))
+
 
 def info_menu():
     """
