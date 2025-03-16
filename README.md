@@ -6,27 +6,35 @@ Contact - Discord - kazumba_2137
 
 # Functions
 
--text encryption/decryption
+- you can press "i" to display how to use these tools
 
--file encryption/decryption
+- text encryption/decryption
 
--Strong password generation
+- file encryption/decryption
 
--generating RSA keys
+- Strong password generation
 
--encryption/decryption using RSA keys
+- generating RSA keys
 
--has DH and ECDH key exchanges (will be explained later in the readme on 14-03-2025)
+- encryption/decryption using RSA keys
 
--can hash file or text with 19 avaliable hashing algorythms
+- has DH and ECDH key exchanges (will be explained later in the readme on 14-03-2025)
 
--can check if 2 hashes (or any character string) are the same 
+- can hash file or text with 19 avaliable hashing algorythms
+
+- can check if 2 hashes (or any character string) are the same 
+
+- communication session for easy communication (Learn more using "how to use?" function)
+
+- base64 to file convertor and file to base64 convertor
+
+- tool for spliting a file into 9mb parts to bypass discord limit
 
 # Usage
 
-Run KazCrypt_v1.2.2_InstallRequirements.bat to install requirements, or you can change the .bat to .txt and install them manually
+Run KazCrypt_v1.3.0_InstallRequirements.bat to install requirements, or you can change the .bat to .txt and install them manually
 
-Open KazCrypt v1.2.2.py file with python 3.13
+Open KazCrypt v1.3.0.py file with python 3.13
 
 Then if everything is working, a windows should pop up, where you can select an operation, e.g. 1) Encrypt text
 
@@ -36,7 +44,7 @@ Next, follow the prompts and enter the required information as requested. For ex
 
 After doing everything right, you should get the output (encrypted text/file)
 
-Note that if generating RSA keys, it can take a bit on older computers, but dont worry, it's not frozen
+Note that if generating RSA keys or generating dh packets, it can take a bit on older computers, but dont worry, it's not frozen
 
 # How it looks?
 
