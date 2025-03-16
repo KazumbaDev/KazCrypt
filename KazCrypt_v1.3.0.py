@@ -21,10 +21,11 @@ from Crypto.PublicKey import RSA
 from Crypto.Cipher import PKCS1_OAEP
 import requests
 from packaging import version
-#import quantcrypt
+import re
+# import quantcrypt
 
 # Your current version (duhh)
-CURRENT_VERSION = "1.2.2"
+CURRENT_VERSION = "1.3.0"
 # Default PBKDF2 iterations for key derivation
 DEFAULT_ITERATIONS = 1_000_000
 # Salt size for AES encryption of files (in bytes)
@@ -488,7 +489,7 @@ def encrypt_file_gcm():
     try:
         with open(save_path, "w") as f:
             f.write(encrypted_data)
-        print("File successfully encrypted with AES-GCM!")
+        print("File successfully encrypted!")
     except Exception as e:
         print("Error saving encrypted file:", str(e))
 
@@ -542,7 +543,7 @@ def decrypt_file_gcm():
         try:
             with open(save_path, "wb") as f:
                 f.write(decrypted_data)
-            print("File successfully decrypted with AES-GCM!")
+            print("File successfully decrypted!")
         except Exception as e:
             print("Error saving decrypted file:", str(e))
     except Exception as e:
@@ -585,16 +586,16 @@ def generate_rsa_keys(bits=4096):
 def save_rsa_keys(private_key: str, public_key: str):
     """
     Interface for saving RSA keys.
-    Asks the user if keys should be printed to console or saved to files.
+    Asks the user if keys should be printed to console or saved to files. not anymore :(
     If saving to files, for the private key, ask if the user wants to encrypt the file.
     """
-    print("As of version 1.2.0 displaying keys on the console is broken!") # Delete after fix
-    choice = input("Do you want the RSA keys to be displayed on the console (c) or saved to files (f)? ").strip().lower() # Needs fixing
-    if choice == "c":
+    #print("As of version 1.2.0 displaying keys on the console is broken!") #Do you want the RSA keys to be displayed on the console (c) or saved to files (f)? 
+    choice = input("Enter f to continue").strip().lower() # Needs fixing
+    if choice == "kazumba": # do not use its not working!
         print("\nPrivate Key:")
-        print(private_key)
+        print("".join(private_key.splitlines()))
         print("\nPublic Key:")
-        print(public_key)
+        print("".join(public_key.splitlines()))
     elif choice == "f":
         encrypt_choice = input("Do you want to encrypt the private key file? (y/n): ").strip().lower()
         if encrypt_choice == "y":
@@ -993,6 +994,364 @@ def match_text():
             else:
                 print("Invalid choice!")
 
+def communicate_session():
+    """
+    Starts a communication session using AES-GCM encryption.
+    The user enters the communication password and (optionally) PBKDF2 iterations once.
+    Then for each message, the function auto-detects whether the input is an encrypted message (Base64)
+    or a plain text message, and it decrypts or encrypts accordingly.
+    Type 'q' to exit the session.
+    """
+    print("\nFirst you and your communication partner must enter the same password.")
+    print("Then you just enter a message to encrypt or decrypt (the script will autodetect if it needs to encrypt it or decrypt).")
+    print("\nEntering communication session.")
+    password = input("Enter password: ").encode()
+
+    iter_input = input("Enter PBKDF2 iterations (or press Enter for default 1,000,000): ").strip()
+    if iter_input.isdigit():
+        default_iterations = int(iter_input)
+    else:
+        default_iterations = DEFAULT_ITERATIONS
+
+    while True:
+        user_input = input("\nEnter message (or 'q' to quit): ").strip()
+        if user_input.lower() == "q":
+            print("Exiting communication session.")
+            break
+
+        # Attempt to auto-detect if the input is an encrypted message
+        try:
+            decoded = base64.b64decode(user_input)
+            # Check minimum length: 4 bytes for iterations + SALT_SIZE + 12 bytes nonce + at least 1 byte ciphertext
+            if len(decoded) >= (4 + SALT_SIZE + 12 + 1):
+                iter_extracted = int.from_bytes(decoded[:4], 'big')
+                salt = decoded[4:4 + SALT_SIZE]
+                nonce = decoded[4 + SALT_SIZE:4 + SALT_SIZE + 12]
+                ciphertext = decoded[4 + SALT_SIZE + 12:]
+                key = derive_key(password, salt, iter_extracted)
+                aesgcm = AESGCM(key)
+                decrypted = aesgcm.decrypt(nonce, ciphertext, None)
+                print("\n[Decrypted Message]:")
+                print(decrypted.decode())
+                continue
+        except Exception:
+            # If any error occurs, treat the input as a plain text message.
+            pass
+
+        # If auto-detection fails, treat input as plain text to encrypt.
+        message = user_input.encode()
+        salt = os.urandom(SALT_SIZE)
+        key = derive_key(password, salt, default_iterations)
+        nonce = os.urandom(12)
+        aesgcm = AESGCM(key)
+        ciphertext = aesgcm.encrypt(nonce, message, None)
+        encrypted_data = base64.b64encode(
+            default_iterations.to_bytes(4, 'big') + salt + nonce + ciphertext
+        ).decode()
+        print("\n[Encrypted Message (Base64)]:")
+        print(encrypted_data)
+
+def file_to_base64():
+    """
+    Converts a file to a Base64-encoded string.
+    """
+    root = tk.Tk()
+    root.withdraw()
+
+    method = input("Enter file path or type 'm' for menu: ").strip().lower()
+    if method == "m":
+        file_path = filedialog.askopenfilename(title="Select file to convert to Base64", filetypes=[("All files", "*.*")])
+    else:
+        file_path = sanitize_file_path(method)
+    if not file_path or not os.path.exists(file_path):
+        print("File not found!")
+        return
+
+    try:
+        with open(file_path, "rb") as f:
+            file_data = f.read()
+        encoded = base64.b64encode(file_data).decode()
+
+        # Generate Base64 save file name
+        dir_name, full_filename = os.path.split(file_path)
+        filename, ext = os.path.splitext(full_filename)
+        save_path = os.path.join(dir_name, f"{filename}{ext}.txt")
+
+        # Save Base64 data to file
+        with open(save_path, "w") as f:
+            f.write(encoded)
+        print(f"[INFO] Base64 data saved to {save_path}")
+    except Exception as e:
+        print("Error converting file to Base64:", str(e))
+
+def base64_to_file():
+    """
+    Converts a Base64-encoded string back to a file.
+    """
+    root = tk.Tk()
+    root.withdraw()
+
+    method = input("Enter Base64 file path or type 'm' for menu: ").strip().lower()
+    if method == "m":
+        file_path = filedialog.askopenfilename(
+            title="Select file containing Base64 data", 
+            filetypes=[("Text Files", "*.txt"), ("All Files", "*.*")]
+        )
+    else:
+        file_path = sanitize_file_path(method)
+
+    if not file_path or not os.path.exists(file_path):
+        print("File not found!")
+        return
+
+    try:
+        with open(file_path, "r") as f:
+            base64_input = f.read().strip()
+        file_data = base64.b64decode(base64_input)
+    except Exception as e:
+        print("Error decoding Base64:", str(e))
+        return
+
+    dir_name, full_filename = os.path.split(file_path)
+    if full_filename.lower().endswith(".txt"):
+        original_filename = full_filename[:-4]  # Remove ".txt"
+    else:
+        original_filename = "decoded_file"
+
+    save_path = os.path.join(dir_name, original_filename)
+
+    try:
+        with open(save_path, "wb") as f:
+            f.write(file_data)
+        print(f"[INFO] File successfully saved to {save_path}")
+    except Exception as e:
+        print("Error saving file:", str(e))
+
+def split_file_into_parts():
+    """
+    Splits a file into 9 MB parts.
+    The first part includes a header containing the original file's extension in the format:
+      KAZSPLITEXT:<original_extension>\n
+    Subsequent parts contain raw file data.
+    """
+    root = tk.Tk()
+    root.withdraw()
+
+    method = input("Enter file path or type 'm' for menu: ").strip().lower()
+    if method == "m":
+        file_path = filedialog.askopenfilename(title="Select file to split", filetypes=[("All files", "*.*")])
+    else:
+        file_path = sanitize_file_path(method)
+    if not file_path or not os.path.exists(file_path):
+        print("File not found!")
+        return
+
+    file_dir = os.path.dirname(file_path)
+    full_filename = os.path.basename(file_path)
+    base_name, ext = os.path.splitext(full_filename)
+    
+    # Create a folder 
+    folder_path = os.path.join(file_dir, base_name)
+    if not os.path.exists(folder_path):
+        os.makedirs(folder_path)
+    
+    part_size = 9 * 1024 * 1024  # 9 MB in bytes
+    part_number = 1
+
+    try:
+        with open(file_path, "rb") as infile:
+            while True:
+                chunk = infile.read(part_size)
+                if not chunk:
+                    break
+                part_filename = f"{base_name}_{part_number}.part"
+                part_filepath = os.path.join(folder_path, part_filename)
+                with open(part_filepath, "wb") as part_file:
+                    if part_number == 1:
+                        # Write header with original extension
+                        header = f"KAZSPLITEXT:{ext}\n".encode()
+                        part_file.write(header)
+                    part_file.write(chunk)
+                print(f"Saved part {part_number} as {part_filepath}")
+                part_number += 1
+        print(f"\nFile successfully split into {part_number - 1} parts in folder: {folder_path}")
+    except Exception as e:
+        print("Error splitting file:", str(e))
+
+def combine_file_parts():
+    """
+    Combines file parts into the original file.
+    The first part contains a header with the original file's extension.
+    """
+    root = tk.Tk()
+    root.withdraw()
+    method = input("Enter folder path containing the parts or type 'm' for menu: ").strip().lower()
+    if method == "m":
+        folder_path = filedialog.askdirectory(title="Select folder containing file parts")
+    else:
+        folder_path = sanitize_file_path(method)
+    if not folder_path or not os.path.isdir(folder_path):
+        print("Folder not found!")
+        return
+    
+    folder_name = os.path.basename(folder_path)
+    all_files = os.listdir(folder_path)
+    pattern = re.compile(rf"^{re.escape(folder_name)}_(\d+)\.part$")
+    parts = []
+    for fname in all_files:
+        match = pattern.match(fname)
+        if match:
+            part_number = int(match.group(1))
+            parts.append((part_number, fname))
+    if not parts:
+        print("No parts found in the selected folder with the expected naming convention.")
+        return
+
+    parts.sort(key=lambda x: x[0])
+    first_part_path = os.path.join(folder_path, parts[0][1])
+    file_ext = ""
+    try:
+        with open(first_part_path, "rb") as f:
+            header_line = f.readline()
+            if header_line.startswith(b"KAZSPLITEXT:"):
+                file_ext = header_line[len(b"KAZSPLITEXT:"):].strip().decode()
+            # Read the rest of the data from the first part after the header.
+            first_part_data = f.read()
+    except Exception as e:
+        print("Error reading the first part for header:", str(e))
+        return
+
+    output_filename = folder_name + "_combined" + file_ext
+    output_path = os.path.join(os.path.dirname(folder_path), output_filename)
+    
+    try:
+        with open(output_path, "wb") as outfile:
+            outfile.write(first_part_data)
+            for part_number, fname in parts[1:]:
+                part_filepath = os.path.join(folder_path, fname)
+                with open(part_filepath, "rb") as infile:
+                    outfile.write(infile.read())
+                print(f"Combined part {part_number} from {part_filepath}")
+        print(f"\nFile successfully reassembled as: {output_path}")
+    except Exception as e:
+        print("Error combining file parts:", str(e))
+
+def info_menu():
+    """
+    Displays an information menu that explains how to use the various functions in the script.
+    Functions are grouped by category.
+    """
+    while True:
+        print("\n=== Information Menu ===")
+        print("Select a category to learn more:")
+        print("1) Encryption/Decryption (AES-GCM)")
+        print("2) RSA Operations")
+        print("3) Diffie–Hellman & ECDH Key Exchanges")
+        print("4) Hashing & Text Matching")
+        print("5) Communication Session")
+        print("6) File & Base64 Tools")
+        print("7) Legacy Features Menu")
+        print("b) Back to Main Menu")
+        choice = input("Enter your choice: ").strip()
+        
+        if choice == "1":
+            print("\n[Encryption/Decryption (AES-GCM)]")
+            print("• Encrypt text: Prompts for an encryption key, a message, and optionally PBKDF2 iterations.")
+            print("  It then derives a key (using a random salt and a 12-byte nonce) and outputs a Base64 string containing:")
+            print("  [iteration count | salt | nonce | ciphertext].")
+            print("• Decrypt text: Prompts for the decryption key and the Base64-encoded encrypted message, then extracts")
+            print("  the iteration count, salt, nonce, and ciphertext to recover the original message.")
+            print("• Encrypt file: Reads a file, encrypts its contents using AES-GCM (with a password-derived key),")
+            print("  and saves the output with a .gcmenc extension.")
+            print("• Decrypt file: Reads a .gcmenc file, prompts for the key, decrypts the content, and saves the original file.")
+        elif choice == "2":
+            print("\n[RSA Operations]")
+            print("• Generate RSA keys: Generates a 4096-bit RSA key pair.")
+            print("  You can choose to display the keys on the console or save them to files (with an option to encrypt the private key).")
+            print("• RSA encrypt text: Encrypts text using an RSA public key (which you can load from a file or enter manually).")
+            print("• RSA decrypt text: Decrypts Base64-encoded RSA-encrypted text using an RSA private key.")
+        elif choice == "3":
+            print("\n[Diffie–Hellman & ECDH Key Exchanges]")
+            print("• Initiate ECDH: Generates an ECDH key pair (using the SECP256R1 curve) and outputs a package (a hex string)")
+            print("  containing your public key. Send this package to your communication partner.")
+            print("• Complete ECDH: Accepts the other party’s public key package, generates your own key pair,")
+            print("  computes the shared secret, and outputs your public key package for the key exchange.")
+            print("• Legacy DH Key Exchange: (Available in the legacy features menu) Performs a Diffie–Hellman key exchange")
+            print("  using older methods. Use these only for backward compatibility as they may be less secure.")
+        elif choice == "4":
+            print("\n[Hashing & Text Matching]")
+            print("• Hash: Lets you compute the hash of text or file contents using a variety of algorithms from Python’s hashlib.")
+            print("  You first choose whether to hash text or a file, then select the desired algorithm from a list.")
+            print("• Check if texts match: Prompts you to enter two strings and then checks if they are exactly the same.")
+        elif choice == "5":
+            print("\n[Communication Session]")
+            print("• Opens an interactive session for secure communication using AES-GCM encryption.")
+            print("  You first enter a common password and (optionally) PBKDF2 iterations.")
+            print("  Then, each message you type is automatically detected as either plain text (to be encrypted)")
+            print("  or a Base64-encoded encrypted message (to be decrypted), allowing you to communicate without")
+            print("  re-entering the password repeatedly.")
+        elif choice == "6":
+            print("\n[File & Base64 Tools]")
+            print("• File to Base64: Converts a file's contents to a Base64-encoded string and saves it as")
+            print("  'originalfilename.extension.txt'.")
+            print("• Base64 to File: Reads a Base64-encoded file, decodes it, and writes out the original file")
+            print("  (by stripping the appended .txt extension).")
+            print("• Split file into parts: Splits a file into 9 MB parts to bypass file size limits (e.g., on Discord).")
+            print("  The first part includes a header with the original file’s extension; all parts use a '.part' extension.")
+            print("• Combine file parts: Reads the split parts, uses the header from the first part to determine the")
+            print("  original extension, and reassembles the file, saving it as 'originalfilename_combined<ext>'.")
+        elif choice == "7":
+            print("\n[Legacy Features Menu]")
+            print("• Contains older implementations maintained for backward compatibility. These include:")
+            print("   - Encrypt/Decrypt text using AES-CBC.")
+            print("   - Encrypt/Decrypt file using AES-CBC.")
+            print("   - Legacy Diffie–Hellman key exchange functions.")
+            print("• Note: Legacy features may pose security risks compared to the newer AES-GCM and ECDH implementations.")
+        elif choice.lower() == "b":
+            break
+        else:
+            print("Invalid option! Please try again.")
+        
+        input("\nPress Enter to return to the Information Menu...")
+
+def tools_menu():
+    while True:
+        print("\nChoose a tool:")
+        print("1) File to base64")
+        print("2) base64 to file")
+        print("3) Split file into 9 mb parts (to bypass discord limits)")
+        print("4) Combine parts into an original file")
+        print("5) NOT IMPLEMENTED YET!")
+        print("6) NOT IMPLEMENTED YET!")
+        print("e) Go to main menu")
+        print("c) Clear console")
+        choice3 = input("Enter the symbol corresponding to your choice: ").strip()
+        
+        if choice3 == "1":
+            file_to_base64()
+            input("\nPress Enter to continue...")
+        elif choice3 == "2":
+            base64_to_file()
+            input("\nPress Enter to continue...")
+        elif choice3 == "3":
+            split_file_into_parts()
+            input("\nPress Enter to continue...")
+        elif choice3 == "4":
+            combine_file_parts()
+            input("\nPress Enter to continue...")
+        elif choice3 == "5":
+            
+            input("\nPress Enter to continue...")
+        elif choice3 == "6":
+            
+            input("\nPress Enter to continue...")
+        elif choice3.lower() == "c":
+            clear_console()
+        elif choice3.lower() == "e":
+            return
+        else:
+            print("Invalid option!")
+
 # Old features menu - Legacy features menu for backward compatibility
 
 def legacy_features():
@@ -1022,10 +1381,10 @@ def legacy_features():
             decrypt_file_cbc()
             input("\nPress Enter to continue...")
         elif choice2 == "5":
-            dh_initiate()  # renamed from dhke() in v1.2.0
+            dh_initiate()
             input("\nPress Enter to continue...")
         elif choice2 == "6":
-            dh_complete()  # renamed from dhke2() in v1.2.0
+            dh_complete()
             input("\nPress Enter to continue...")
         elif choice2.lower() == "c":
             clear_console()
@@ -1051,6 +1410,9 @@ while True:
     print("10) Complete Elliptic Curve Diffie–Hellman Key Exchange")
     print("11) Hash")
     print("12) Check if texts match")
+    print("13) Open communication session")
+    print("i) How to use? / help")
+    print("t) Open other tools menu")
     print("o) Show legacy features (Not recommended)")
     print("c) Clear console")
     print("e) Exit")
@@ -1084,7 +1446,7 @@ while True:
         ecdh_initiate()
         input("\nPress Enter to continue...")
     elif choice == "10":
-        ecdh_complete()  # renamed from ecdh_respond() in v1.2.0
+        ecdh_complete()  
         input("\nPress Enter to continue...")
     elif choice == "11":
         perform_hash()
@@ -1092,8 +1454,15 @@ while True:
     elif choice == "12":
         match_text()
         input("\nPress Enter to continue...")
+    elif choice == "13":
+        communicate_session()
+        input("\nPress Enter to continue...")
+    elif choice.lower() == "i":
+        info_menu()
     elif choice.lower() == "o":
         legacy_features()
+    elif choice.lower() == "t":
+        tools_menu()
     elif choice.lower() == "c":
         clear_console()
     elif choice.lower() == "e":
@@ -1107,5 +1476,5 @@ while True:
 """
 to fix
 lines:
-567
+593 - rsa keys printing on console
 """

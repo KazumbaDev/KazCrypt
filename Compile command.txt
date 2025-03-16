@@ -1,1 +1,1 @@
-py -3.13 -m PyInstaller --console --onefile KazCrypt_v1.2.2.py
+py -3.13 -m PyInstaller --console --onefile KazCrypt_v1.3.0.py
