@@ -25,7 +25,7 @@ import re
 # import quantcrypt
 
 # Your current version (duhh)
-CURRENT_VERSION = "1.3.0"
+CURRENT_VERSION = "1.3.1"
 # Default PBKDF2 iterations for key derivation
 DEFAULT_ITERATIONS = 1_000_000
 # Salt size for AES encryption of files (in bytes)
