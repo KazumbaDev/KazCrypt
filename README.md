@@ -32,9 +32,9 @@ Contact - Discord - kazumba_2137
 
 # Usage
 
-Run KazCrypt_v1.3.0_InstallRequirements.bat to install requirements, or you can change the .bat to .txt and install them manually
+Run KazCrypt_v1.3.1_InstallRequirements.bat to install requirements, or you can change the .bat to .txt and install them manually
 
-Open KazCrypt v1.3.0.py file with python 3.13
+Open KazCrypt v1.3.1.py file with python 3.13
 
 Then if everything is working, a windows should pop up, where you can select an operation, e.g. 1) Encrypt text
 
