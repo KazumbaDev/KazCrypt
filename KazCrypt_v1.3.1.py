@@ -1184,8 +1184,6 @@ def combine_file_parts():
     The first part should include a header in the form:
         KAZSPLITEXT:<original_extension>\n
     """
-    import os, re, tkinter as tk
-    from tkinter import filedialog
 
     root = tk.Tk()
     root.withdraw()
