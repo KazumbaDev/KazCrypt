@@ -25,7 +25,7 @@ import re
 # import quantcrypt
 
 # Your current version (duhh)
-CURRENT_VERSION = "1.3.1"
+CURRENT_VERSION = "1.3.2"
 # Default PBKDF2 iterations for key derivation
 DEFAULT_ITERATIONS = 1_000_000
 # Salt size for AES encryption of files (in bytes)
@@ -94,7 +94,7 @@ def encrypt_cbc():
     password = input("Enter encryption key (password): ").encode()
     message = input("Enter message to encrypt: ").encode()
     iterations = get_iterations()
-
+    start = time.perf_counter() # Start timer
     # Generate a random salt and derive a 32-byte key
     salt = os.urandom(16)
     key = derive_key(password, salt, iterations)
@@ -116,6 +116,8 @@ def encrypt_cbc():
         iterations.to_bytes(4, 'big') + salt + iv + ciphertext
     ).decode()
 
+    end = time.perf_counter() # Stop timer
+    print(f"\nEncryption took {end - start:.3}s") # Print timer
     print("\nEncryption Successful!")
     print("Encrypted Data (Base64):")
     print(encrypted_data)
@@ -126,7 +128,7 @@ def decrypt_cbc():
     
     # Get encrypted data in a single line
     encrypted_input = input("Enter encrypted data (Base64): ").strip()
-    
+    start = time.perf_counter() # Start timer
     try:
         # Decode Base64 input
         encrypted_bytes = base64.b64decode(encrypted_input)
@@ -149,6 +151,8 @@ def decrypt_cbc():
         pad_length = decrypted_padded[-1]
         decrypted_message = decrypted_padded[:-pad_length]
         
+        end = time.perf_counter() # Stop timer
+        print(f"\nDecryption took {end - start:.3}s") # Print timer
         print("\nDecryption Successful!")
         print("Decrypted message:", decrypted_message.decode())
 
@@ -170,7 +174,7 @@ def encrypt_gcm():
     password = input("Enter encryption key (password): ").encode()
     message = input("Enter message to encrypt: ").encode()
     iterations = get_iterations()
-
+    start = time.perf_counter() # Start timer
     # Generate a random salt and derive a 32-byte key
     salt = os.urandom(SALT_SIZE)
     key = derive_key(password, salt, iterations)
@@ -185,6 +189,8 @@ def encrypt_gcm():
         iterations.to_bytes(4, 'big') + salt + nonce + ciphertext
     ).decode()
 
+    end = time.perf_counter() # Stop timer
+    print(f"\nEncryption took {end - start:.3}s") # Print timer
     print("\nEncryption Successful!")
     print("Encrypted Data (Base64):")
     print(encrypted_data)
@@ -193,7 +199,7 @@ def decrypt_gcm():
     """Decrypts a message encrypted using AES-GCM with PBKDF2 key derivation."""
     password = input("Enter decryption key (password): ").encode()
     encrypted_input = input("Enter encrypted data (Base64): ").strip()
-    
+    start = time.perf_counter() # Start timer
     try:
         encrypted_bytes = base64.b64decode(encrypted_input)
         
@@ -207,6 +213,8 @@ def decrypt_gcm():
         aesgcm = AESGCM(key)
         decrypted = aesgcm.decrypt(nonce, ciphertext, None)
         
+        end = time.perf_counter() # Stop the timer
+        print(f"\nDecryption took {end - start:.3}s") # Print timer
         print("\nDecryption Successful!")
         print("Decrypted message:", decrypted.decode())
     except Exception as e:
@@ -261,7 +269,7 @@ def perform_hash():
         return hash_object.hexdigest()
 
     def hash_main():
-        option = input("Hash (t)ext or a (f)ile? ").strip().lower()
+        option = input("\nHash (t)ext or a (f)ile? ").strip().lower()
         if option not in ("t", "f"):
             print("Invalid option!")
             return
@@ -309,6 +317,8 @@ def encrypt_file_cbc():
     password = input("Enter encryption key (password) for file encryption: ").encode()
     iterations = get_iterations()
 
+    start = time.perf_counter() # Start timer
+
     salt = os.urandom(16)
     key = derive_key(password, salt, iterations)
     iv = os.urandom(16)
@@ -329,6 +339,7 @@ def encrypt_file_cbc():
     else:
         default_save_name = original_name
 
+    end = time.perf_counter() # Stop timer
     save_choice = input("Enter file path for saving or type 'm' for menu: ").strip()
     if save_choice.lower() == 'm':
         save_path = filedialog.asksaveasfilename(
@@ -349,6 +360,7 @@ def encrypt_file_cbc():
     try:
         with open(save_path, "w") as f:
             f.write(encrypted_data)
+        print(f"\nEncryption took {end - start:.3}s") # Print timer
         print("File successfully encrypted!")
     except Exception as e:
         print("Error saving encrypted file:", str(e))
@@ -383,6 +395,8 @@ def decrypt_file_cbc():
     password = input("Enter decryption key (password) for file decryption: ").encode()
     
     try:
+        start = time.perf_counter() # Start the timer
+        
         encrypted_bytes = base64.b64decode(encrypted_data)
         iterations = int.from_bytes(encrypted_bytes[:4], 'big')
         salt = encrypted_bytes[4:20]
@@ -403,6 +417,7 @@ def decrypt_file_cbc():
         else:
             default_save_name = original_name
 
+        end = time.perf_counter() # Stop the timer
         save_choice = input("Enter file path to save decrypted file or type 'm' for menu: ").strip()
         if save_choice.lower() == 'm':
             save_path = filedialog.asksaveasfilename(
@@ -423,6 +438,7 @@ def decrypt_file_cbc():
         try:
             with open(save_path, "wb") as f:
                 f.write(decrypted_data)
+            print(f"\nDecryption took {end - start:.3}s") # Print timer
             print("File successfully decrypted!")
         except Exception as e:
             print("Error saving decrypted file:", str(e))
@@ -462,7 +478,9 @@ def encrypt_file_gcm():
 
     password = input("Enter encryption key (password) for file encryption: ").encode()
     iterations = get_iterations()
-
+    
+    start = time.perf_counter() # Start the timer
+    
     salt = os.urandom(SALT_SIZE)
     key = derive_key(password, salt, iterations)
     nonce = os.urandom(12)
@@ -473,6 +491,8 @@ def encrypt_file_gcm():
     encrypted_data = base64.b64encode(iterations.to_bytes(4, 'big') + salt + nonce + ciphertext).decode()
     original_name = os.path.basename(file_path)
     default_save_name = original_name + ".gcmenc" if not original_name.lower().endswith(".gcmenc") else original_name
+
+    end = time.perf_counter() # Stop the timer
 
     save_choice = input("Enter file path for saving or type 'm' for menu: ").strip()
     if save_choice.lower() == 'm':
@@ -489,6 +509,7 @@ def encrypt_file_gcm():
     try:
         with open(save_path, "w") as f:
             f.write(encrypted_data)
+        print(f"\nEncryption took {end - start:.3}s") # Print timer
         print("File successfully encrypted!")
     except Exception as e:
         print("Error saving encrypted file:", str(e))
@@ -515,6 +536,8 @@ def decrypt_file_gcm():
 
     password = input("Enter decryption key (password) for file decryption: ").encode()
     try:
+        start = time.perf_counter() # Start the timer
+        
         encrypted_bytes = base64.b64decode(encrypted_data)
         iterations = int.from_bytes(encrypted_bytes[:4], 'big')
         salt = encrypted_bytes[4:4+SALT_SIZE]
@@ -527,6 +550,8 @@ def decrypt_file_gcm():
         
         original_name = os.path.basename(file_path)
         default_save_name = original_name.replace(".gcmenc", "") if original_name.lower().endswith(".gcmenc") else original_name + ".dec"
+        
+        end = time.perf_counter() # Stop the timer
         
         save_choice = input("Enter file path to save decrypted file or type 'm' for menu: ").strip()
         if save_choice.lower() == 'm':
@@ -543,6 +568,7 @@ def decrypt_file_gcm():
         try:
             with open(save_path, "wb") as f:
                 f.write(decrypted_data)
+                print(f"\nDecryption took {end - start:.3}s") # Print the timer
             print("File successfully decrypted!")
         except Exception as e:
             print("Error saving decrypted file:", str(e))
@@ -578,19 +604,23 @@ def generate_random_password():
 
 def generate_rsa_keys(bits=4096):
     """Generates an RSA key pair and returns them as strings."""
+    start = time.perf_counter()
     key = RSA.generate(bits)
     private_key = key.export_key()
     public_key = key.publickey().export_key()
-    return private_key.decode(), public_key.decode()
+    end = time.perf_counter()
+    gen_time = end - start
+    return private_key.decode(), public_key.decode(), gen_time
 
-def save_rsa_keys(private_key: str, public_key: str):
+def save_rsa_keys(private_key: str, public_key: str, gen_time: str):
     """
     Interface for saving RSA keys.
     Asks the user if keys should be printed to console or saved to files. not anymore :(
     If saving to files, for the private key, ask if the user wants to encrypt the file.
     """
-    #print("As of version 1.2.0 displaying keys on the console is broken!") #Do you want the RSA keys to be displayed on the console (c) or saved to files (f)? 
-    choice = input("Enter f to continue").strip().lower() # Needs fixing
+    #print("As of version 1.3.2 displaying keys on the console is broken!") #Do you want the RSA keys to be displayed on the console (c) or saved to files (f)? 
+    print(f"\nKey generation took {gen_time:.3}s") # Print timer
+    choice = input("Enter f to continue: ").strip().lower() # Needs fixing
     if choice == "kazumba": # do not use its not working!
         print("\nPrivate Key:")
         print("".join(private_key.splitlines()))
@@ -680,8 +710,8 @@ def rsa_keys_interface():
     """Interface for generating RSA keys.
     Asks whether to display keys on console or save to files.
     """
-    private_key, public_key = generate_rsa_keys()
-    save_rsa_keys(private_key, public_key)
+    private_key, public_key, gen_time = generate_rsa_keys()
+    save_rsa_keys(private_key, public_key, gen_time,)
 
 def rsa_encrypt_text():
     """Encrypts text using RSA public key."""
@@ -1177,6 +1207,59 @@ def split_file_into_parts():
         print(f"\nFile successfully split into {part_number - 1} parts in folder: {folder_path}")
     except Exception as e:
         print("Error splitting file:", str(e))
+    
+def split_file_into_parts_custom():
+    """
+    Splits a file into custom size parts.
+    The first part includes a header containing the original file's extension in the format:
+      KAZSPLITEXT:<original_extension>\n
+    Subsequent parts contain raw file data.
+    """
+    root = tk.Tk()
+    root.withdraw()
+
+    file_size = int(input("Enter your designed parts size (in megabytes): ").strip())
+    
+    method = input("Enter file path or type 'm' for menu: ").strip().lower()
+    if method == "m":
+        file_path = filedialog.askopenfilename(title="Select file to split", filetypes=[("All files", "*.*")])
+    else:
+        file_path = sanitize_file_path(method)
+    if not file_path or not os.path.exists(file_path):
+        print("File not found!")
+        return
+
+    file_dir = os.path.dirname(file_path)
+    full_filename = os.path.basename(file_path)
+    base_name, ext = os.path.splitext(full_filename)
+    
+    # Create a folder 
+    folder_path = os.path.join(file_dir, base_name)
+    if not os.path.exists(folder_path):
+        os.makedirs(folder_path)
+    
+    part_size = file_size * 1024 * 1024  # parts size in bytes
+    part_number = 1
+
+    try:
+        with open(file_path, "rb") as infile:
+            while True:
+                chunk = infile.read(part_size)
+                if not chunk:
+                    break
+                part_filename = f"{base_name}_{part_number}.part"
+                part_filepath = os.path.join(folder_path, part_filename)
+                with open(part_filepath, "wb") as part_file:
+                    if part_number == 1:
+                        # Write header with original extension
+                        header = f"KAZSPLITEXT:{ext}\n".encode()
+                        part_file.write(header)
+                    part_file.write(chunk)
+                print(f"Saved part {part_number} as {part_filepath}")
+                part_number += 1
+        print(f"\nFile successfully split into {part_number - 1} parts in folder: {folder_path}")
+    except Exception as e:
+        print("Error splitting file:", str(e))
 
 def combine_file_parts():
     """
@@ -1260,7 +1343,7 @@ def info_menu():
         print("5) Communication Session")
         print("6) File & Base64 Tools")
         print("7) Legacy Features Menu")
-        print("b) Back to Main Menu")
+        print("e) Exit to Main Menu")
         choice = input("Enter your choice: ").strip()
         
         if choice == "1":
@@ -1316,22 +1399,22 @@ def info_menu():
             print("   - Encrypt/Decrypt file using AES-CBC.")
             print("   - Legacy Diffie–Hellman key exchange functions.")
             print("• Note: Legacy features may pose security risks compared to the newer AES-GCM and ECDH implementations.")
-        elif choice.lower() == "b":
+        elif choice.lower() == "e":
             break
         else:
             print("Invalid option! Please try again.")
         
         input("\nPress Enter to return to the Information Menu...")
 
-def tools_menu():
+def files_menu():
     while True:
         print("\nChoose a tool:")
         print("1) File to base64")
         print("2) base64 to file")
         print("3) Split file into 9 mb parts (to bypass discord limits)")
-        print("4) Combine parts into an original file")
-        print("5) NOT IMPLEMENTED YET!")
-        print("6) NOT IMPLEMENTED YET!")
+        print("4) Split file into custom size parts")
+        print("5) Combine parts into an original file")
+        #print("6) NOT IMPLEMENTED YET!")
         print("e) Go to main menu")
         print("c) Clear console")
         choice3 = input("Enter the symbol corresponding to your choice: ").strip()
@@ -1346,10 +1429,10 @@ def tools_menu():
             split_file_into_parts()
             input("\nPress Enter to continue...")
         elif choice3 == "4":
-            combine_file_parts()
+            split_file_into_parts_custom()
             input("\nPress Enter to continue...")
         elif choice3 == "5":
-            
+            combine_file_parts()
             input("\nPress Enter to continue...")
         elif choice3 == "6":
             
@@ -1402,76 +1485,102 @@ def legacy_features():
         else:
             print("Invalid option!")
 
+
+def encryption_related():
+    while True:
+        print("\nChoose an operation:")
+        print("1) Encrypt text (AES-GCM)")
+        print("2) Decrypt text (AES-GCM)")
+        print("3) Encrypt file (AES-GCM)")
+        print("4) Decrypt file (AES-GCM)")
+        print("5) Generate random password")
+        print("6) Generate RSA keys")
+        print("7) RSA encrypt text")
+        print("8) RSA decrypt text")
+        print("9) Initiate Elliptic Curve Diffie–Hellman Key Exchange")
+        print("10) Complete Elliptic Curve Diffie–Hellman Key Exchange")
+        print("11) Hash")
+        print("12) Check if texts match")
+        print("13) Open communication session")
+        print("c) Clear console")
+        print("e) Main menu")
+        choice = input("Enter the symbol corresponding to your choice: ").strip()
+        
+        if choice == "1":
+            encrypt_gcm()
+            input("\nPress Enter to continue...")
+        elif choice == "2":
+            decrypt_gcm()
+            input("\nPress Enter to continue...")
+        elif choice == "3":
+            encrypt_file_gcm()
+            input("\nPress Enter to continue...")
+        elif choice == "4":
+            decrypt_file_gcm()
+            input("\nPress Enter to continue...")
+        elif choice == "5":
+            generate_random_password()
+            input("\nPress Enter to continue...")
+        elif choice == "6":
+            rsa_keys_interface()
+            input("\nPress Enter to continue...")
+        elif choice == "7":
+            rsa_encrypt_text()
+            input("\nPress Enter to continue...")
+        elif choice == "8":
+            rsa_decrypt_text()
+            input("\nPress Enter to continue...")
+        elif choice == "9":
+            ecdh_initiate()
+            input("\nPress Enter to continue...")
+        elif choice == "10":
+            ecdh_complete()  
+            input("\nPress Enter to continue...")
+        elif choice == "11":
+            perform_hash()
+            input("\nPress Enter to continue...")
+        elif choice == "12":
+            match_text()
+            input("\nPress Enter to continue...")
+        elif choice == "13":
+            communicate_session()
+            input("\nPress Enter to continue...")
+        elif choice.lower() == "c":
+            clear_console()
+        elif choice.lower() == "e":
+            return
+        else:
+            print("Invalid option!")
+
 # --------------------------
 # Main menu
 # --------------------------
+
 while True:
     print("\nChoose an operation:")
-    print("1) Encrypt text (AES-GCM)")
-    print("2) Decrypt text (AES-GCM)")
-    print("3) Encrypt file (AES-GCM)")
-    print("4) Decrypt file (AES-GCM)")
-    print("5) Generate random password")
-    print("6) Generate RSA keys")
-    print("7) RSA encrypt text")
-    print("8) RSA decrypt text")
-    print("9) Initiate Elliptic Curve Diffie–Hellman Key Exchange")
-    print("10) Complete Elliptic Curve Diffie–Hellman Key Exchange")
-    print("11) Hash")
-    print("12) Check if texts match")
-    print("13) Open communication session")
-    print("i) How to use? / help")
-    print("t) Open other tools menu")
-    print("o) Show legacy features (Not recommended)")
+    print("1) Encryption related")
+    print("2) File manipulation related")
+    print("3) Legacy features")
+    print("4) How to use? / help")
+    #print("5) ")
+    #print("6) ")
     print("c) Clear console")
     print("e) Exit")
     choice = input("Enter the symbol corresponding to your choice: ").strip()
-    
     if choice == "1":
-        encrypt_gcm()
-        input("\nPress Enter to continue...")
+        encryption_related()
     elif choice == "2":
-        decrypt_gcm()
-        input("\nPress Enter to continue...")
+        files_menu()
     elif choice == "3":
-        encrypt_file_gcm()
-        input("\nPress Enter to continue...")
+        legacy_features()
     elif choice == "4":
-        decrypt_file_gcm()
-        input("\nPress Enter to continue...")
+        info_menu()
     elif choice == "5":
-        generate_random_password()
+        
         input("\nPress Enter to continue...")
     elif choice == "6":
-        rsa_keys_interface()
+        
         input("\nPress Enter to continue...")
-    elif choice == "7":
-        rsa_encrypt_text()
-        input("\nPress Enter to continue...")
-    elif choice == "8":
-        rsa_decrypt_text()
-        input("\nPress Enter to continue...")
-    elif choice == "9":
-        ecdh_initiate()
-        input("\nPress Enter to continue...")
-    elif choice == "10":
-        ecdh_complete()  
-        input("\nPress Enter to continue...")
-    elif choice == "11":
-        perform_hash()
-        input("\nPress Enter to continue...")
-    elif choice == "12":
-        match_text()
-        input("\nPress Enter to continue...")
-    elif choice == "13":
-        communicate_session()
-        input("\nPress Enter to continue...")
-    elif choice.lower() == "i":
-        info_menu()
-    elif choice.lower() == "o":
-        legacy_features()
-    elif choice.lower() == "t":
-        tools_menu()
     elif choice.lower() == "c":
         clear_console()
     elif choice.lower() == "e":
@@ -1481,9 +1590,7 @@ while True:
         print("Invalid option!")
 
 
-
 """
 to fix
-lines:
-593 - rsa keys printing on console
+rsa keys printing on console
 """
