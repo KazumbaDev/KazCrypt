@@ -50,11 +50,11 @@ Note that if generating RSA keys or generating dh packets, it can take a bit on 
 
 This is the main menu:
 
-![Menu](Photos/Menu_v1.2.2.png "Main Menu")
+![Menu](Photos/Main-menu-V1.3.2.png "Main Menu")
 
 This is an example of encrypting text:
 
-![Example of a text encryption](Photos/Text_Enc_v1.2.2.png "Example of a text encryption")
+![Example of a text encryption](Photos/TextEnc-V1.3.2.png "Example of a text encryption")
 
 This is how key exchange looks like:
 
